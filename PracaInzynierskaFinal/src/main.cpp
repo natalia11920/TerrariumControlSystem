@@ -34,11 +34,11 @@ const char* topic3="PumpTerr_01";
 const char* topic4="MatTerr_01";
 unsigned int mqttPort=1883;
 unsigned long int chanel = 2279857;
-int poziom=127;
+int level=0;
 //unsigned long int chanelControl = 2300632;
 //unsigned long int chanelSetValue = 2334001; 
 
-int ManualMode;
+int flagM=0;
 unsigned long Now=0;
 unsigned long Last=0;
 unsigned long Difference=0;
@@ -80,41 +80,13 @@ void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
 
 /*-----------------------------------------------------------------------------------------------------------------------------*/
-
+int flag2=0;
 void IRAM_ATTR pwmInterrupt(){
-static int sum;
-if (sum<=poziom)
-{
-    digitalWrite(HeatingLamp,1);
-}
-if (sum>poziom)
-{
-    digitalWrite(HeatingLamp,0);
-    Serial.println('.');
-}
-if (sum==255){
-    sum=0;
-}
-sum+=1;
+flag2=1;
 }
 
 void IRAM_ATTR measureFunction(){
-
-float outputT1=ReadingTemperature(TempAdress1);
-float outputT2=ReadingTemperature(TempAdress2);
-float outputT3=ReadingTemperature(TempAdress3);
-
-
-if (digitalRead(HeatingLamp)==0)
-{
-  ThingSpeak.setField(7, 1);
-}
-if (digitalRead(HeatingLamp)==1)
-{
-  ThingSpeak.setField(7, 0);
-}
-
-ThingSpeak.writeFields(chanel, APIKey);	
+flagM=1;
 }
 
 void setup() {
@@ -125,6 +97,22 @@ pinMode(HeatingCable, OUTPUT);
 pinMode(HeatingLamp, OUTPUT);
 pinMode(HeatingMat, OUTPUT);
 pinMode(Pump, OUTPUT);
+
+WiFi.mode(WIFI_STA);
+WiFi.begin(ssid, pass);
+ while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("...");
+  }
+
+Serial.println("WiFi network established");
+
+mqttClient.setServer(mqttServer,mqttPort);
+mqttClient.setCallback(ReadMqtt);
+mqttClient.subscribe(topic1,2);
+mqttClient.subscribe(topic2,2);
+mqttClient.subscribe(topic3,2);
+mqttClient.subscribe(topic4,2);
 
 timer1 = timerBegin(1, 80, true);
 timer2 = timerBegin(2 , 80, true);
@@ -142,21 +130,6 @@ digitalWrite(HeatingMat, 1);
 digitalWrite(Pump, 1);
 */
 
-WiFi.mode(WIFI_STA);
-WiFi.begin(ssid, pass);
- while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("...");
-  }
-
-Serial.println("WiFi network established");
-
-mqttClient.setServer(mqttServer,mqttPort);
-mqttClient.setCallback(ReadMqtt);
-mqttClient.subscribe(topic1,2);
-mqttClient.subscribe(topic2,2);
-mqttClient.subscribe(topic3,2);
-mqttClient.subscribe(topic4,2);
 
 ThingSpeak.begin(client);
 TempSensors.begin();
@@ -177,7 +150,46 @@ if (!mqttClient.connected()) {
   reconnect();
 }
 mqttClient.loop();
-delay(100);
+
+if (flagM==1)
+{
+   
+float outputT1=ReadingTemperature(TempAdress1);
+float outputT2=ReadingTemperature(TempAdress2);
+float outputT3=ReadingTemperature(TempAdress3);
+
+if (mqttClient.connect("ESP32TerrariumClient")==1)
+{
+if (digitalRead(HeatingLamp)==0)
+{
+  ThingSpeak.setField(7, 1);
+}
+if (digitalRead(HeatingLamp)==1)
+{
+  ThingSpeak.setField(7, 0);
+}
+
+int err=ThingSpeak.writeFields(chanel, APIKey);
+Serial.println(err);}	
+flagM=0;
+}
+
+if (flag2==1){
+static int sum=0;
+if (sum<=level)
+{
+    digitalWrite(HeatingLamp,0);
+}
+if (sum>level)
+{
+    digitalWrite(HeatingLamp,1);
+    Serial.println('.');
+}
+if (sum==255){
+    sum=0;
+}
+sum+=1;
+flag2=0;}
  //Wire.beginTransmission(RTCAdress);
  //Wire.requestFrom(RTCAdress, 7);
  //int b=Wire.available();
@@ -281,7 +293,7 @@ Serial.println(topic);
 
 if(strcmp(topic1, topic)==0 )
 {
-  SetTempUp=Status;
+  level=Status;
 }
 
 if(strcmp(topic2, topic)==0)
