@@ -34,11 +34,14 @@ const char* topic3="PumpTerr_01";
 const char* topic4="MatTerr_01";
 unsigned int mqttPort=1883;
 unsigned long int chanel = 2279857;
-int level=0;
+int level1=0;
+int level2=0;
+int level3=0;
 //unsigned long int chanelControl = 2300632;
 //unsigned long int chanelSetValue = 2334001; 
 
 int flagM=0;
+int flagP=0;
 unsigned long Now=0;
 unsigned long Last=0;
 unsigned long Difference=0;
@@ -80,9 +83,38 @@ void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
 
 /*-----------------------------------------------------------------------------------------------------------------------------*/
-int flag2=0;
 void IRAM_ATTR pwmInterrupt(){
-flag2=1;
+static int sum=0;
+if (sum<=level1)
+{
+    digitalWrite(HeatingLamp,0);
+}
+if (sum>level1)
+{
+    digitalWrite(HeatingLamp,1);
+}
+if (sum<=level2)
+{
+    digitalWrite(HeatingMat,0);
+}
+if (sum>level2)
+{
+    digitalWrite(HeatingMat,1);
+}
+
+if (sum<=level3)
+{
+    digitalWrite(HeatingCable,0);
+}
+if (sum>level3)
+{
+    digitalWrite(HeatingCable,1);
+}
+if (sum==255){
+    sum=0;
+}
+//Serial.println(sum);
+sum+=1;
 }
 
 void IRAM_ATTR measureFunction(){
@@ -97,6 +129,11 @@ pinMode(HeatingCable, OUTPUT);
 pinMode(HeatingLamp, OUTPUT);
 pinMode(HeatingMat, OUTPUT);
 pinMode(Pump, OUTPUT);
+
+digitalWrite(HeatingCable, 1);
+digitalWrite(HeatingLamp, 1);
+digitalWrite(HeatingMat, 1);
+digitalWrite(Pump, 1);
 
 WiFi.mode(WIFI_STA);
 WiFi.begin(ssid, pass);
@@ -123,13 +160,6 @@ timerAlarmWrite(timer2,30000000,true);
 timerAlarmEnable(timer1);
 timerAlarmEnable(timer2);
 
-/*
-digitalWrite(HeatingCable, 1);
-digitalWrite(HeatingLamp, 1);
-digitalWrite(HeatingMat, 1);
-digitalWrite(Pump, 1);
-*/
-
 
 ThingSpeak.begin(client);
 TempSensors.begin();
@@ -147,9 +177,18 @@ if(WiFi.status() == WL_CONNECTION_LOST || WiFi.status() == WL_DISCONNECTED){
  }
 
 if (!mqttClient.connected()) {
-  reconnect();
+      if(mqttClient.connect("ESP32TerrariumClient")==1)
+     { Serial.println("connected");
+      mqttClient.subscribe(topic1);
+      mqttClient.subscribe(topic2);
+      mqttClient.subscribe(topic3);
+      mqttClient.subscribe(topic4);
+      }
+
 }
 mqttClient.loop();
+
+
 
 if (flagM==1)
 {
@@ -160,36 +199,21 @@ float outputT3=ReadingTemperature(TempAdress3);
 
 if (mqttClient.connect("ESP32TerrariumClient")==1)
 {
-if (digitalRead(HeatingLamp)==0)
+if (level2!=0)
 {
   ThingSpeak.setField(7, 1);
 }
-if (digitalRead(HeatingLamp)==1)
+if (level2==0)
 {
   ThingSpeak.setField(7, 0);
 }
 
 int err=ThingSpeak.writeFields(chanel, APIKey);
+Serial.println(millis());
 Serial.println(err);}	
 flagM=0;
 }
 
-if (flag2==1){
-static int sum=0;
-if (sum<=level)
-{
-    digitalWrite(HeatingLamp,0);
-}
-if (sum>level)
-{
-    digitalWrite(HeatingLamp,1);
-    Serial.println('.');
-}
-if (sum==255){
-    sum=0;
-}
-sum+=1;
-flag2=0;}
  //Wire.beginTransmission(RTCAdress);
  //Wire.requestFrom(RTCAdress, 7);
  //int b=Wire.available();
@@ -268,18 +292,6 @@ Wire.endTransmission();
 
 
 
-void reconnect() {
-
-    if (mqttClient.connect("ESP32TerrariumClient")==1) {
-      Serial.println("connected");
-      mqttClient.subscribe(topic1);
-      mqttClient.subscribe(topic2);
-      mqttClient.subscribe(topic3);
-      mqttClient.subscribe(topic4);
-  }
-}
-
-
 void ReadMqtt(char* topic, byte* payload, unsigned int length) {
 
 int Status;
@@ -293,12 +305,12 @@ Serial.println(topic);
 
 if(strcmp(topic1, topic)==0 )
 {
-  level=Status;
+  level1=Status;
 }
 
 if(strcmp(topic2, topic)==0)
 {
-  SetTempDown=Status;
+  level3=Status;
 }
 
 if(strcmp(topic3, topic)==0)
@@ -308,9 +320,8 @@ if(strcmp(topic3, topic)==0)
 
 if(strcmp(topic4, topic)==0)
 {
-  SetTempMiddle=Status;
+  level2=Status;
 }
-
 }
 
 
@@ -368,7 +379,6 @@ int SoilMoistureMaintenance(float ActualValue, float SMoistureTreshold)
 float ReadingTemperature( DeviceAddress TempSensorAdress)
 {
 float tempValue;
-//int errTemp;
 TempSensors.requestTemperatures();
 tempValue=TempSensors.getTempC(TempSensorAdress);
 if (TempSensorAdress==TempAdress2) 
