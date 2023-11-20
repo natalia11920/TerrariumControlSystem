@@ -9,6 +9,8 @@
 #include <Wire.h>
 #include <PubSubClient.h>
 
+#include "structury.h"
+
 /*-----------------------------------------------------------------------------------------------------------------------------*/
 #define DallasThermometers 15
 #define Dht11Pin1 18   
@@ -18,6 +20,8 @@
 #define HeatingMat 12
 #define HeatingCable 33
 #define Pump 27
+
+#define SAMPLE_TIME 10.0
 //byte pinSDA=21;
 //byte pinSCL=22;
 
@@ -34,26 +38,26 @@ const char* topic3="PumpTerr_01";
 const char* topic4="MatTerr_01";
 unsigned int mqttPort=1883;
 unsigned long int chanel = 2279857;
-int level1=0;
-int level2=0;
-int level3=0;
+volatile int level1=127;
+volatile int level2=127;
+volatile int level3=127;
+int level1H=0;
+int level2H=0;
+int level3H=0;
 //unsigned long int chanelControl = 2300632;
 //unsigned long int chanelSetValue = 2334001; 
 
-int flagM=0;
+volatile int flagM=0;
 int flagP=0;
 unsigned long Now=0;
 unsigned long Last=0;
 unsigned long Difference=0;
 
 //Regulation
-float SetTempUp=0;
-float HisteresisTempUp=0.5;
-float SetTempDown=0;
-float HisteresisTempDown=0.5;
-float SetTempMiddle=0;
-float HisteresisTempMiddle=0.5;
-float InteriorHumidity=5;
+float SetTemp1=0;
+float SetTemp2=0;
+float SetTemp3=0;
+float SetHum=0;
 float HumidityHisteresis=5;
 float SoilMoistureTreshold=10;
 
@@ -84,41 +88,20 @@ void reconnect();
 
 /*-----------------------------------------------------------------------------------------------------------------------------*/
 void IRAM_ATTR pwmInterrupt(){
-static int sum=0;
-if (sum<=level1)
-{
-    digitalWrite(HeatingLamp,0);
-}
-if (sum>level1)
-{
-    digitalWrite(HeatingLamp,1);
-}
-if (sum<=level2)
-{
-    digitalWrite(HeatingMat,0);
-}
-if (sum>level2)
-{
-    digitalWrite(HeatingMat,1);
-}
-
-if (sum<=level3)
-{
-    digitalWrite(HeatingCable,0);
-}
-if (sum>level3)
-{
-    digitalWrite(HeatingCable,1);
-}
-if (sum==255){
+  static int sum=0;
+  
+  digitalWrite(HeatingLamp,sum>level1);
+  digitalWrite(HeatingMat,sum>level2);
+  digitalWrite(HeatingCable,sum>level3);
+  
+  if (sum >= 255){
     sum=0;
-}
-//Serial.println(sum);
-sum+=1;
+  }
+  sum += 1;
 }
 
 void IRAM_ATTR measureFunction(){
-flagM=1;
+  flagM=1;
 }
 
 void setup() {
@@ -199,18 +182,19 @@ float outputT3=ReadingTemperature(TempAdress3);
 
 if (mqttClient.connect("ESP32TerrariumClient")==1)
 {
-if (level2!=0)
+if (level3!=0)
 {
   ThingSpeak.setField(7, 1);
 }
-if (level2==0)
+if (level3==0)
 {
   ThingSpeak.setField(7, 0);
 }
 
 int err=ThingSpeak.writeFields(chanel, APIKey);
 Serial.println(millis());
-Serial.println(err);}	
+Serial.println(err);
+}	
 flagM=0;
 }
 
@@ -247,7 +231,7 @@ delay(2000);
 /*--------------------------------humidity regulation-----------------------------------------*/
 /*float AverageHum=(outputH1+outputH2)/2;
 bool onH1 = HumRelayRegulator(InteriorHumidity, AverageHum, HumidityHisteresis);
-digitalWrite(Pump,onH1);
+digitalWrite(Pump,!onH1);
 
 float outputS1=ReadingMoisture();
 //bool onS1 = SoilMoistureMaintenance(outputS1, SoilMoistureTreshold);
@@ -315,7 +299,7 @@ if(strcmp(topic2, topic)==0)
 
 if(strcmp(topic3, topic)==0)
 {
-  InteriorHumidity=Status;
+  SetHum=Status;
 }
 
 if(strcmp(topic4, topic)==0)
@@ -325,34 +309,16 @@ if(strcmp(topic4, topic)==0)
 }
 
 
-
-int TempRelayRegulator(float SetValue, float ActualValue, float Histeresis)
-{
-      float Error;
-      bool On;
-      if (ActualValue<SetValue-Histeresis)
-      {
-        On=0;
-      }
-        if (ActualValue>SetValue+Histeresis)
-      {
-        On=1;
-      }
-
-    return On;
-}
-
 int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
 {
-      float Error;
-      bool On;
+      static bool On=0;
       if (ActualValue<SetValue-Histeresis)
       {
-        On=0;
+        On=1;
       }
         if (ActualValue>SetValue+Histeresis)
       {
-        On=1;
+        On=0;
       }
 
     return On;
@@ -360,17 +326,7 @@ int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
 
 int SoilMoistureMaintenance(float ActualValue, float SMoistureTreshold)
 {
-      bool On;
-      if (ActualValue<=SMoistureTreshold)
-      {
-        On=1;
-      }
-        if (ActualValue>SMoistureTreshold)
-      {
-        On=0;
-      }
-
-      return On;
+      return (ActualValue<=SMoistureTreshold);
 }
 
 
@@ -445,4 +401,82 @@ float ReadingMoisture()
   ThingSpeak.setField(6, SoilPercentege);
 
   return SoilPercentege;
+}
+
+void Control1(float SetValue, float ActualValue, int TempFlag)
+{
+  float deltaTemp1=24.2, deltaTemp2=9, deltaTemp3=9, Error;
+  if (TempFlag==1)
+  {
+      Error=SetValue-ActualValue;
+      level1H=round(map(Error,0,deltaTemp1,0,255));
+
+      if (Error!=0)
+      {
+        level1=level1+level1H;
+
+        if (level1>255)
+        {
+          level1=255;
+        }
+        if (level1<0)
+        {
+          level1=0;
+        }
+      }
+  }
+
+  if (TempFlag==2)
+  {
+      Error=SetValue-ActualValue;
+      level1H=round(map(Error,0,deltaTemp1,0,255));
+
+      if (Error!=0)
+      {
+        level2=level2+level2H;
+
+        if (level2>255)
+        {
+          level2=255;
+        }
+        if (level2<0)
+        {
+          level2=0;
+        }
+      }
+  }
+
+  if (TempFlag==3)
+  {
+      Error=SetValue-ActualValue;
+      level1H=round(map(Error,0,deltaTemp1,0,255));
+
+      if (Error!=0)
+      {
+        level3=level3+level3H;
+
+        if (level3>255)
+        {
+          level3=255;
+        }
+        if (level3<0)
+        {
+          level3=0;
+        }
+      }
+  }
+
+}
+
+float PIDController(float actualValue, float setValue)
+{
+  static float sum_error;
+  
+  float Error,up,ui,u,kp,Ti,Tp;
+  Error=setValue-actualValue;
+  sum_error=sum_error+Error;
+  up=kp*Error;
+  ui=kp/Ti*SAMPLE_TIME*sum_error;
+  u=up+ui;
+  return u;
 }
