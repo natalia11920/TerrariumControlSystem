@@ -20,7 +20,7 @@
 #define HeatingMat 12
 #define HeatingCable 33
 #define Pump 27
-
+#define Max_PWM 255
 #define SAMPLE_TIME 10.0
 //byte pinSDA=21;
 //byte pinSCL=22;
@@ -38,12 +38,9 @@ const char* topic3="PumpTerr_01";
 const char* topic4="MatTerr_01";
 unsigned int mqttPort=1883;
 unsigned long int chanel = 2279857;
-volatile int level1=127;
-volatile int level2=127;
-volatile int level3=127;
-int level1H=0;
-int level2H=0;
-int level3H=0;
+volatile int level1=0;
+volatile int level2=0;
+volatile int level3=0;
 //unsigned long int chanelControl = 2300632;
 //unsigned long int chanelSetValue = 2334001; 
 
@@ -86,6 +83,8 @@ void SetTime();
 void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
 
+TSstruct TempMeasurements();
+
 /*-----------------------------------------------------------------------------------------------------------------------------*/
 void IRAM_ATTR pwmInterrupt(){
   static int sum=0;
@@ -94,7 +93,7 @@ void IRAM_ATTR pwmInterrupt(){
   digitalWrite(HeatingMat,sum>level2);
   digitalWrite(HeatingCable,sum>level3);
   
-  if (sum >= 255){
+  if (sum >= Max_PWM){
     sum=0;
   }
   sum += 1;
@@ -152,6 +151,48 @@ Wire.begin();
 //SetTime();
 }
 
+void SendTSData(TSstruct data)
+{
+  ThingSpeak.setField(1,data.tempUp);
+  ThingSpeak.setField(2,data.tempMiddle);
+  ThingSpeak.setField(3,data.tempDown);
+  ThingSpeak.setField(4,data.hum);
+  ThingSpeak.setField(5,data.humDown);
+  ThingSpeak.setField(6,data.heater);
+  ThingSpeak.writeFields(chanel,APIKey);
+}
+
+
+void SetHeaterLevel(int id, float u)
+{
+
+      if (u<0.0)
+      {
+          u=0.0;
+      }
+
+      if (u>1.0)
+      {
+        u=1.0;
+      }
+
+
+      int PWM=Max_PWM*u;
+
+      switch (id)
+      {
+      case 1: 
+        level1=PWM;
+        break;
+      case 2:
+        level2=PWM;
+        break;
+      case 3:
+        level3=PWM;
+        break;
+      }
+}
+
 
 void loop() {
 
@@ -175,10 +216,17 @@ mqttClient.loop();
 
 if (flagM==1)
 {
-   
-float outputT1=ReadingTemperature(TempAdress1);
-float outputT2=ReadingTemperature(TempAdress2);
-float outputT3=ReadingTemperature(TempAdress3);
+  TSstruct sensorData;
+  sensorData=TempMeasurements();
+
+  float wysterowanie = 0.5;
+  SetHeaterLevel(1, wysterowanie);
+
+  sensorData.heater = wysterowanie;
+  SendTSData(sensorData);
+
+
+
 
 if (mqttClient.connect("ESP32TerrariumClient")==1)
 {
@@ -197,84 +245,22 @@ Serial.println(err);
 }	
 flagM=0;
 }
-
- //Wire.beginTransmission(RTCAdress);
- //Wire.requestFrom(RTCAdress, 7);
- //int b=Wire.available();
- //byte Time[7];
- //for (int i=0; i<7; i++)
- //{
-  //Time[i]=Wire.read();
-  //Serial.println(Time[i]);
- //}
-
-  //Wire.endTransmission();
-//delay(1000);
-//delay(1000);
-
-/*----------------------------temperature regulation-----------------------------------------*/
-/*bool onT1 = TempRelayRegulator(SetTempUp, outputT3, HisteresisTempUp);
-digitalWrite(HeatingLamp,onT1);
-
-bool onT2 = TempRelayRegulator(SetTempDown, outputT2, HisteresisTempDown);
-  digitalWrite(HeatingCable,onT2);
-
-bool onT3 = TempRelayRegulator(SetTempMiddle, outputT1, HisteresisTempMiddle);
-digitalWrite(HeatingMat,onT3);*/
-
-/*
-float outputH1= ReadingHumidity(Dht11Pin1);
-delay(2000);
-float outputH2=ReadingHumidity(Dht11Pin2);
-delay(2000); 
-
-/*--------------------------------humidity regulation-----------------------------------------*/
-/*float AverageHum=(outputH1+outputH2)/2;
-bool onH1 = HumRelayRegulator(InteriorHumidity, AverageHum, HumidityHisteresis);
-digitalWrite(Pump,!onH1);
-
-float outputS1=ReadingMoisture();
-//bool onS1 = SoilMoistureMaintenance(outputS1, SoilMoistureTreshold);
-//digitalWrite(Pump,onS1);
-delay(1000);
-if (digitalRead(HeatingLamp)==0)
-{
-  ThingSpeak.setField(7, 1);
-}
-if (digitalRead(HeatingLamp)==1)
-{
-  ThingSpeak.setField(7, 0);
-}
-
-if (digitalRead(HeatingCable)==0)
-{
-  ThingSpeak.setField(8, 1);
-}
-if (digitalRead(HeatingCable)==1)
-{
-  ThingSpeak.setField(8, 0);
-}
-
-delay(500);*/
 }
 
 /*-----------------------------------------------------------------------------------------------------------------------------*/
 
-
-void SetTime()
+TSstruct TempMeasurements()
 {
-  byte Data[7]={0, 5, 18, 5, 0, 11, 11};//{seconds,minutes,hours,day,date,month,year};
-Wire.beginTransmission(RTCAdress);
- //Wire.write(0);
-for (int i=0; i<7;i++)
-{
-Wire.write(Data[i]);
+  TSstruct data;
+  TempSensors.requestTemperatures();
+  data.tempUp=TempSensors.getTempC(TempAdress2);
+  data.tempMiddle=TempSensors.getTempC(TempAdress1);
+  data.tempDown=TempSensors.getTempC(TempAdress3);
+  data.hum=HumSensor1.readHumidity();
+  data.humDown=ReadingMoisture();
+  data.heater=0;
+  return data;
 }
-Wire.endTransmission();
-
-}
-
-
 
 void ReadMqtt(char* topic, byte* payload, unsigned int length) {
 
@@ -332,141 +318,17 @@ int SoilMoistureMaintenance(float ActualValue, float SMoistureTreshold)
 
 /*-----------------------------------------Measurements-------------------------------------------------*/
 
-float ReadingTemperature( DeviceAddress TempSensorAdress)
-{
-float tempValue;
-TempSensors.requestTemperatures();
-tempValue=TempSensors.getTempC(TempSensorAdress);
-if (TempSensorAdress==TempAdress2) 
-{
-Serial.print("Temperature on the top of the terrarium:");
-Serial.println(tempValue);
-Serial.println("ºC");
-ThingSpeak.setField(1, tempValue);
-}
-if (TempSensorAdress==TempAdress3)
-{
-Serial.print("Temperature on the bottom of the terrarium:");
-Serial.println(tempValue);
-Serial.println("ºC");
-ThingSpeak.setField(3, tempValue);
-}
-if (TempSensorAdress==TempAdress1)
-{
-  tempValue=TempSensors.getTempC(TempAdress1);
-Serial.print("Temperature in the middle of the terrarium:");
-Serial.println(tempValue);
-Serial.println("ºC");
-ThingSpeak.setField(2, tempValue);
-}
-
-return tempValue;
-}
-
-
-float ReadingHumidity(int dhtPin)
-{
-  float humidityValue;
-  //int humErr;
-if(dhtPin==Dht11Pin1){
-  humidityValue=HumSensor1.readHumidity();
-  Serial.print("Humidity on the top of the terrarium: ");
-  Serial.print(humidityValue);
-  Serial.println("%");
-  ThingSpeak.setField(4, humidityValue);
-}
-if(dhtPin==Dht11Pin1){
-
-  humidityValue=HumSensor2.readHumidity();
-  Serial.print("Humidity on the bottom of the terrarium: ");
-  Serial.print(humidityValue);
-  Serial.println("%");
-  ThingSpeak.setField(5, humidityValue);
-}
-  return humidityValue;
-}
-
 
 float ReadingMoisture()
 {
   int SoilMoisture,SoilDry=4095,SoilWet=2512;
   float SoilPercentege;
   SoilMoisture=analogRead(CapacitiveSensor);
-  Serial.print("Soil moisture: ");
-  Serial.println(SoilMoisture);
-  Serial.print("Percentege soil moisture: ");
   SoilPercentege=map(SoilMoisture,SoilWet,SoilDry,100,0);
-  Serial.print(SoilPercentege);
-  Serial.println("%");
-  ThingSpeak.setField(6, SoilPercentege);
 
   return SoilPercentege;
 }
 
-void Control1(float SetValue, float ActualValue, int TempFlag)
-{
-  float deltaTemp1=24.2, deltaTemp2=9, deltaTemp3=9, Error;
-  if (TempFlag==1)
-  {
-      Error=SetValue-ActualValue;
-      level1H=round(map(Error,0,deltaTemp1,0,255));
-
-      if (Error!=0)
-      {
-        level1=level1+level1H;
-
-        if (level1>255)
-        {
-          level1=255;
-        }
-        if (level1<0)
-        {
-          level1=0;
-        }
-      }
-  }
-
-  if (TempFlag==2)
-  {
-      Error=SetValue-ActualValue;
-      level1H=round(map(Error,0,deltaTemp1,0,255));
-
-      if (Error!=0)
-      {
-        level2=level2+level2H;
-
-        if (level2>255)
-        {
-          level2=255;
-        }
-        if (level2<0)
-        {
-          level2=0;
-        }
-      }
-  }
-
-  if (TempFlag==3)
-  {
-      Error=SetValue-ActualValue;
-      level1H=round(map(Error,0,deltaTemp1,0,255));
-
-      if (Error!=0)
-      {
-        level3=level3+level3H;
-
-        if (level3>255)
-        {
-          level3=255;
-        }
-        if (level3<0)
-        {
-          level3=0;
-        }
-      }
-  }
-
-}
 
 float PIDController(float actualValue, float setValue)
 {
