@@ -13,8 +13,7 @@
 
 /*-----------------------------------------------------------------------------------------------------------------------------*/
 #define DallasThermometers 15
-#define Dht11Pin1 18   
-#define Dht11Pin2 5 
+#define Dht22Pin 18   
 #define CapacitiveSensor 32
 #define HeatingLamp 14
 #define HeatingMat 12
@@ -22,6 +21,8 @@
 #define Pump 27
 #define Max_PWM 255
 #define SAMPLE_TIME 10.0
+#define U_max 1.0
+#define U_min 0.0
 //byte pinSDA=21;
 //byte pinSCL=22;
 
@@ -41,17 +42,13 @@ volatile int level2=0;
 volatile int level3=0;
 volatile int flagM=0;
 volatile int flagP=0;
-unsigned long Now=0;
-unsigned long Last=0;
-unsigned long Difference=0;
 
-//Regulation
-float SetTemp1=0;
-float SetTemp2=0;
-float SetTemp3=0;
-float SetHum=0;
-float HumidityHisteresis=5;
-float SoilMoistureTreshold=10;
+float SetTemp1=0.0;
+float SetTemp2=0.0;
+float SetTemp3=0.0;
+float SetHum=0.0;
+float HumidityHisteresis=5.0;
+float SoilMoistureTreshold=10.0;
 
 
 hw_timer_t * timer1 = NULL; 
@@ -60,25 +57,25 @@ WiFiClient client;
 PubSubClient mqttClient(client);
 OneWire OneWireBus(DallasThermometers);
 DallasTemperature TempSensors(&OneWireBus);
-DHT HumSensor1(Dht11Pin1, DHT11);
+DHT HumSensor1(Dht22Pin, DHT22);
+PIRegulation Temp1;
+PIRegulation Temp2;
+PIRegulation Temp3;
 
 DeviceAddress TempAdress2={0x28, 0x94, 0x49, 0x38, 0x80, 0x22, 0xB, 0x2F};
 DeviceAddress TempAdress3={ 0x28, 0x3C, 0xE1, 0x7F, 0x80, 0x22, 0xB, 0xB9};
 DeviceAddress TempAdress1={0x28, 0xC6, 0x3E, 0xBE, 0x80, 0x22, 0xB, 0x83};
 int RTCAdress=0x64;
 
-float ReadingTemperature(DeviceAddress);
-float ReadingHumidity(int);
 float ReadingMoisture();
-int TempRelayRegulator(float, float, float);
 int HumRelayRegulator(float, float, float);
-int SoilMoistureMaintenance(float, float);
-void SetTime();
 void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
-
+PIRegulation PIController( float, float);
 TSstruct TempMeasurements();
-/*-----------------------------------------------------------------------------------------------------------------------------*/
+void SendTSData(TSstruct );
+void SetHeaterLevel(int, float);
+
 void IRAM_ATTR pwmInterrupt(){
   static int sum=0;
   
@@ -95,16 +92,6 @@ void IRAM_ATTR pwmInterrupt(){
 void IRAM_ATTR measureFunction(){
   flagM=1;
 }
-
-PID PIDController(PID Params, float refValue, float setValue)
-{
-  float Error=setValue-refValue;
-  Params.sum_err=Params.sum_err+Error;
-  Params.u=Params.Kp*Error+Params.Ki/Params.Ti*SAMPLE_TIME*Params.sum_err;
-}
-
-
-
 
 void setup() {
 
@@ -153,6 +140,47 @@ Wire.begin();
 //SetTime();
 }
 
+
+
+void loop() {
+
+if(WiFi.status() == WL_CONNECTION_LOST || WiFi.status() == WL_DISCONNECTED){
+    WiFi.reconnect();
+ }
+
+if (!mqttClient.connected()) {
+      if(mqttClient.connect("ESP32TerrariumClient")==1)
+     {
+      mqttClient.subscribe(topic1);
+      mqttClient.subscribe(topic2);
+      mqttClient.subscribe(topic3);
+      mqttClient.subscribe(topic4);
+      }
+
+}
+mqttClient.loop();
+
+
+if (flagM==1)
+{
+  TSstruct sensorData;
+  sensorData=TempMeasurements();
+  // Temp1=PIController(sensorData.tempUp,SetTemp1);
+  // SetHeaterLevel(1, Temp1.u);
+  // sensorData.heater = level1;
+  float wysterowanie = 0.5;
+  SetHeaterLevel(1, 0);
+  sensorData.heater1 = level1;
+  SetHeaterLevel(2, 0);
+  sensorData.heater2 = level2;
+  SetHeaterLevel(3, 0);
+  sensorData.heater3 = level3;
+  SendTSData(sensorData);
+  flagM=0;
+}	
+}
+
+
 void SendTSData(TSstruct data)
 {
   ThingSpeak.setField(1,data.tempUp);
@@ -160,7 +188,9 @@ void SendTSData(TSstruct data)
   ThingSpeak.setField(3,data.tempDown);
   ThingSpeak.setField(4,data.hum);
   ThingSpeak.setField(5,data.humDown);
-  ThingSpeak.setField(6,data.heater);
+  ThingSpeak.setField(6,data.heater1);
+  ThingSpeak.setField(7,data.heater2);
+  ThingSpeak.setField(8,data.heater3);
   ThingSpeak.writeFields(chanel,APIKey);
 }
 
@@ -168,14 +198,14 @@ void SendTSData(TSstruct data)
 void SetHeaterLevel(int id, float u)
 {
 
-      if (u<0.0)
+      if (u<U_min)
       {
-          u=0.0;
+          u=U_min;
       }
 
-      if (u>1.0)
+      if (u>U_max)
       {
-        u=1.0;
+        u=U_max;
       }
 
 
@@ -195,64 +225,37 @@ void SetHeaterLevel(int id, float u)
       }
 }
 
+void ReadMqtt(char* topic, byte* payload, unsigned int length) {
 
-void loop() {
+      int Status;
+      String MessageString;
+        for (int i = 0; i < length; i++) {
+          MessageString.concat((char)payload[i]);
+        }
+      Status=MessageString.toInt();
+      Serial.println(Status);
+      Serial.println(topic);
 
-if(WiFi.status() == WL_CONNECTION_LOST || WiFi.status() == WL_DISCONNECTED){
-    WiFi.reconnect();
- }
-
-if (!mqttClient.connected()) {
-      if(mqttClient.connect("ESP32TerrariumClient")==1)
-     { Serial.println("connected");
-      mqttClient.subscribe(topic1);
-      mqttClient.subscribe(topic2);
-      mqttClient.subscribe(topic3);
-      mqttClient.subscribe(topic4);
+      if(strcmp(topic1, topic)==0 )
+      {
+        level1=Status;
       }
 
+      if(strcmp(topic2, topic)==0)
+      {
+        level3=Status;
+      }
+
+      if(strcmp(topic3, topic)==0)
+      {
+        SetHum=Status;
+      }
+
+      if(strcmp(topic4, topic)==0)
+      {
+        level2=Status;
+      }
 }
-mqttClient.loop();
-
-
-
-if (flagM==1)
-{
-  TSstruct sensorData;
-  PID Control;
-  sensorData=TempMeasurements();
-
-  float wysterowanie = 0.5;
-  SetHeaterLevel(1, wysterowanie);
-
-  sensorData.heater = wysterowanie;
-
-  Control.PIDController(sensorData.tempUp,SetTemp1);
-  SendTSData(sensorData);
-
-
-
-
-if (mqttClient.connect("ESP32TerrariumClient")==1)
-{
-if (level3!=0)
-{
-  ThingSpeak.setField(7, 1);
-}
-if (level3==0)
-{
-  ThingSpeak.setField(7, 0);
-}
-
-int err=ThingSpeak.writeFields(chanel, APIKey);
-Serial.println(millis());
-Serial.println(err);
-}	
-flagM=0;
-}
-}
-
-/*-----------------------------------------------------------------------------------------------------------------------------*/
 
 TSstruct TempMeasurements()
 {
@@ -263,40 +266,21 @@ TSstruct TempMeasurements()
   data.tempDown=TempSensors.getTempC(TempAdress3);
   data.hum=HumSensor1.readHumidity();
   data.humDown=ReadingMoisture();
-  data.heater=0;
+  data.heater1=0;
+  data.heater2=0;
+  data.heater3=0;
   return data;
 }
 
-void ReadMqtt(char* topic, byte* payload, unsigned int length) {
 
-int Status;
-String MessageString;
-  for (int i = 0; i < length; i++) {
-    MessageString.concat((char)payload[i]);
-  }
-Status=MessageString.toInt();
-Serial.println(Status);
-Serial.println(topic);
-
-if(strcmp(topic1, topic)==0 )
+float ReadingMoisture()
 {
-  level1=Status;
-}
+  int SoilMoisture,SoilDry=4095,SoilWet=2512;
+  float SoilPercentege;
+  SoilMoisture=analogRead(CapacitiveSensor);
+  SoilPercentege=map(SoilMoisture,SoilWet,SoilDry,100,0);
 
-if(strcmp(topic2, topic)==0)
-{
-  level3=Status;
-}
-
-if(strcmp(topic3, topic)==0)
-{
-  SetHum=Status;
-}
-
-if(strcmp(topic4, topic)==0)
-{
-  level2=Status;
-}
+  return SoilPercentege;
 }
 
 
@@ -315,16 +299,15 @@ int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
     return On;
 }
 
-
-/*-----------------------------------------Measurements-------------------------------------------------*/
-
-
-float ReadingMoisture()
+PIRegulation PIController( float refValue, float setValue)
 {
-  int SoilMoisture,SoilDry=4095,SoilWet=2512;
-  float SoilPercentege;
-  SoilMoisture=analogRead(CapacitiveSensor);
-  SoilPercentege=map(SoilMoisture,SoilWet,SoilDry,100,0);
-
-  return SoilPercentege;
+  PIRegulation Params;
+  float Error=setValue-refValue;
+  Params.sum_err=Params.sum_err+Error;
+  if (Params.u>U_max || Params.u<U_min)
+  {
+      Params.sum_err=Params.sum_err-Error;
+  }
+  Params.u=Params.Kp*Error+Params.Ki/Params.Ti*SAMPLE_TIME*Params.sum_err;
+  return Params;
 }

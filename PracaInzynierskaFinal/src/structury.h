@@ -7,8 +7,9 @@ typedef struct TSstruc
     float tempDown = 0.0;
     float hum = 0.0;
     float humDown = 0.0;
-    float heater = 0.0;
-
+    float heater1 = 0.0;
+    float heater2 = 0.0;
+    float heater3 = 0.0;
 }TSstruct;
 
 
@@ -19,6 +20,5 @@ typedef struct PIRegulation
     float Ti;
     float sum_err;
     float u;
-    float PIController(float, float);
 }PIRegulation;
 
