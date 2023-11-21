@@ -29,8 +29,6 @@
 const char* ssid = "2.4G-Vectra-WiFi-224A24" ;
 const char* pass ="ez0zkxdqnzkfydj1";
 const char* APIKey= "W55RWPVWCLJOIC82";
-//const char* APIKeyControl= "Z3F8BLN1OO93OWM8";
-//const char* APISetValue="YGJM8QNYFYNKCZFO";
 const char* mqttServer="test.mosquitto.org";
 const char* topic1="BulbTerr_01";
 const char* topic2="CableTerr_01";
@@ -41,11 +39,8 @@ unsigned long int chanel = 2279857;
 volatile int level1=0;
 volatile int level2=0;
 volatile int level3=0;
-//unsigned long int chanelControl = 2300632;
-//unsigned long int chanelSetValue = 2334001; 
-
 volatile int flagM=0;
-int flagP=0;
+volatile int flagP=0;
 unsigned long Now=0;
 unsigned long Last=0;
 unsigned long Difference=0;
@@ -66,7 +61,6 @@ PubSubClient mqttClient(client);
 OneWire OneWireBus(DallasThermometers);
 DallasTemperature TempSensors(&OneWireBus);
 DHT HumSensor1(Dht11Pin1, DHT11);
-DHT HumSensor2(Dht11Pin2, DHT11);
 
 DeviceAddress TempAdress2={0x28, 0x94, 0x49, 0x38, 0x80, 0x22, 0xB, 0x2F};
 DeviceAddress TempAdress3={ 0x28, 0x3C, 0xE1, 0x7F, 0x80, 0x22, 0xB, 0xB9};
@@ -84,7 +78,6 @@ void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
 
 TSstruct TempMeasurements();
-
 /*-----------------------------------------------------------------------------------------------------------------------------*/
 void IRAM_ATTR pwmInterrupt(){
   static int sum=0;
@@ -102,6 +95,16 @@ void IRAM_ATTR pwmInterrupt(){
 void IRAM_ATTR measureFunction(){
   flagM=1;
 }
+
+PID PIDController(PID Params, float refValue, float setValue)
+{
+  float Error=setValue-refValue;
+  Params.sum_err=Params.sum_err+Error;
+  Params.u=Params.Kp*Error+Params.Ki/Params.Ti*SAMPLE_TIME*Params.sum_err;
+}
+
+
+
 
 void setup() {
 
@@ -146,7 +149,6 @@ timerAlarmEnable(timer2);
 ThingSpeak.begin(client);
 TempSensors.begin();
 HumSensor1.begin();
-HumSensor2.begin();
 Wire.begin();
 //SetTime();
 }
@@ -217,12 +219,15 @@ mqttClient.loop();
 if (flagM==1)
 {
   TSstruct sensorData;
+  PID Control;
   sensorData=TempMeasurements();
 
   float wysterowanie = 0.5;
   SetHeaterLevel(1, wysterowanie);
 
   sensorData.heater = wysterowanie;
+
+  Control.PIDController(sensorData.tempUp,SetTemp1);
   SendTSData(sensorData);
 
 
@@ -310,11 +315,6 @@ int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
     return On;
 }
 
-int SoilMoistureMaintenance(float ActualValue, float SMoistureTreshold)
-{
-      return (ActualValue<=SMoistureTreshold);
-}
-
 
 /*-----------------------------------------Measurements-------------------------------------------------*/
 
@@ -327,18 +327,4 @@ float ReadingMoisture()
   SoilPercentege=map(SoilMoisture,SoilWet,SoilDry,100,0);
 
   return SoilPercentege;
-}
-
-
-float PIDController(float actualValue, float setValue)
-{
-  static float sum_error;
-  
-  float Error,up,ui,u,kp,Ti,Tp;
-  Error=setValue-actualValue;
-  sum_error=sum_error+Error;
-  up=kp*Error;
-  ui=kp/Ti*SAMPLE_TIME*sum_error;
-  u=up+ui;
-  return u;
 }
