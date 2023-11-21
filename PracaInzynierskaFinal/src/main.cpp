@@ -71,7 +71,7 @@ float ReadingMoisture();
 int HumRelayRegulator(float, float, float);
 void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
-void PIController( PIRegulation &,float, float);
+void PIController( float, float);
 TSstruct TempMeasurements();
 void SendTSData(TSstruct );
 void SetHeaterLevel(int, float);
@@ -165,7 +165,7 @@ if (flagM==1)
 {
   TSstruct sensorData;
   sensorData=TempMeasurements();
-  // PIController(ParametersT1,tempUp,SetTemp1);
+  // Parameters1.PIController(tempUp,SetTemp1);
   // SetHeaterLevel(1, ParametersT1.u);
   // sensorData.heater = level1;
   float wysterowanie = 0.5;
@@ -298,7 +298,7 @@ int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
 
     return On;
 }
-
+/*
 void PIController( PIRegulation &Params, float refValue, float setValue)
 {
   float Error=setValue-refValue;
@@ -308,4 +308,4 @@ void PIController( PIRegulation &Params, float refValue, float setValue)
       Params.sum_err=Params.sum_err-Error;
   }
   Params.u=Params.Kp*Error+Params.Ki/Params.Ti*SAMPLE_TIME*Params.sum_err;
-}
+}*/

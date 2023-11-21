@@ -20,5 +20,17 @@ typedef struct PIRegulation
     float Ti;
     float sum_err;
     float u;
+
+    void PIControl(float setValue, float refValue)
+    {
+        float Error=setValue-refValue;
+        sum_err=sum_err+Error;
+        if (u>1 || u<0)
+        {
+            sum_err=sum_err-Error;
+        }
+        u=Kp*Error+Ki/Ti*10*sum_err;
+
+    }
 }PIRegulation;
 
