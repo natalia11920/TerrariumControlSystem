@@ -58,9 +58,34 @@ PubSubClient mqttClient(client);
 OneWire OneWireBus(DallasThermometers);
 DallasTemperature TempSensors(&OneWireBus);
 DHT HumSensor1(Dht22Pin, DHT22);
-PIRegulation ParametersT1;
-PIRegulation ParametersT2;
-PIRegulation ParametersT3;
+PIRegulation ParametersT1
+{
+     1.0,
+     1.0,
+     1.0,
+     0.0,
+     0.0,
+
+};
+PIRegulation ParametersT2
+{
+     1.0,
+     1.0,
+     1.0,
+     0.0,
+     0.0,
+
+};
+PIRegulation ParametersT3
+{
+     1.0,
+     1.0,
+     1.0,
+     0.0,
+     0.0,
+
+};
+
 
 DeviceAddress TempAdress2={0x28, 0x94, 0x49, 0x38, 0x80, 0x22, 0xB, 0x2F};
 DeviceAddress TempAdress3={ 0x28, 0x3C, 0xE1, 0x7F, 0x80, 0x22, 0xB, 0xB9};
@@ -71,7 +96,6 @@ float ReadingMoisture();
 int HumRelayRegulator(float, float, float);
 void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
-void PIController( float, float);
 TSstruct TempMeasurements();
 void SendTSData(TSstruct );
 void SetHeaterLevel(int, float);
@@ -195,21 +219,21 @@ void SendTSData(TSstruct data)
 }
 
 
-void SetHeaterLevel(int id, float u)
+void SetHeaterLevel(int id, float U)
 {
 
-      if (u<U_min)
+      if (U<U_min)
       {
-          u=U_min;
+          U=U_min;
       }
 
-      if (u>U_max)
+      if (U>U_max)
       {
-        u=U_max;
+        U=U_max;
       }
 
 
-      int PWM=Max_PWM*u;
+      int PWM=Max_PWM*U;
 
       switch (id)
       {
@@ -298,14 +322,3 @@ int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
 
     return On;
 }
-/*
-void PIController( PIRegulation &Params, float refValue, float setValue)
-{
-  float Error=setValue-refValue;
-  Params.sum_err=Params.sum_err+Error;
-  if (Params.u>U_max || Params.u<U_min)
-  {
-      Params.sum_err=Params.sum_err-Error;
-  }
-  Params.u=Params.Kp*Error+Params.Ki/Params.Ti*SAMPLE_TIME*Params.sum_err;
-}*/
