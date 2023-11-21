@@ -13,7 +13,7 @@
 
 /*-----------------------------------------------------------------------------------------------------------------------------*/
 #define DallasThermometers 15
-#define Dht22Pin 18   
+#define Dht22Pin 5   
 #define CapacitiveSensor 32
 #define HeatingLamp 14
 #define HeatingMat 12
@@ -58,9 +58,9 @@ PubSubClient mqttClient(client);
 OneWire OneWireBus(DallasThermometers);
 DallasTemperature TempSensors(&OneWireBus);
 DHT HumSensor1(Dht22Pin, DHT22);
-PIRegulation Temp1;
-PIRegulation Temp2;
-PIRegulation Temp3;
+PIRegulation ParametersT1;
+PIRegulation ParametersT2;
+PIRegulation ParametersT3;
 
 DeviceAddress TempAdress2={0x28, 0x94, 0x49, 0x38, 0x80, 0x22, 0xB, 0x2F};
 DeviceAddress TempAdress3={ 0x28, 0x3C, 0xE1, 0x7F, 0x80, 0x22, 0xB, 0xB9};
@@ -71,7 +71,7 @@ float ReadingMoisture();
 int HumRelayRegulator(float, float, float);
 void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
-PIRegulation PIController( float, float);
+void PIController( PIRegulation &,float, float);
 TSstruct TempMeasurements();
 void SendTSData(TSstruct );
 void SetHeaterLevel(int, float);
@@ -165,8 +165,8 @@ if (flagM==1)
 {
   TSstruct sensorData;
   sensorData=TempMeasurements();
-  // Temp1=PIController(sensorData.tempUp,SetTemp1);
-  // SetHeaterLevel(1, Temp1.u);
+  // PIController(ParametersT1,tempUp,SetTemp1);
+  // SetHeaterLevel(1, ParametersT1.u);
   // sensorData.heater = level1;
   float wysterowanie = 0.5;
   SetHeaterLevel(1, 0);
@@ -299,9 +299,8 @@ int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
     return On;
 }
 
-PIRegulation PIController( float refValue, float setValue)
+void PIController( PIRegulation &Params, float refValue, float setValue)
 {
-  PIRegulation Params;
   float Error=setValue-refValue;
   Params.sum_err=Params.sum_err+Error;
   if (Params.u>U_max || Params.u<U_min)
@@ -309,5 +308,4 @@ PIRegulation PIController( float refValue, float setValue)
       Params.sum_err=Params.sum_err-Error;
   }
   Params.u=Params.Kp*Error+Params.Ki/Params.Ti*SAMPLE_TIME*Params.sum_err;
-  return Params;
 }
