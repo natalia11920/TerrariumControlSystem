@@ -8,10 +8,9 @@
 #include <time.h>
 #include <Wire.h>
 #include <PubSubClient.h>
-
 #include "structury.h"
 
-/*-----------------------------------------------------------------------------------------------------------------------------*/
+
 #define DallasThermometers 15
 #define Dht22Pin 5   
 #define CapacitiveSensor 32
@@ -23,8 +22,7 @@
 #define SAMPLE_TIME 10.0
 #define U_max 1.0
 #define U_min 0.0
-//byte pinSDA=21;
-//byte pinSCL=22;
+
 
 
 const char* ssid = "2.4G-Vectra-WiFi-224A24" ;
@@ -47,8 +45,6 @@ float SetTemp1=0.0;
 float SetTemp2=0.0;
 float SetTemp3=0.0;
 float SetHum=0.0;
-float HumidityHisteresis=5.0;
-float SoilMoistureTreshold=10.0;
 
 
 hw_timer_t * timer1 = NULL; 
@@ -58,33 +54,9 @@ PubSubClient mqttClient(client);
 OneWire OneWireBus(DallasThermometers);
 DallasTemperature TempSensors(&OneWireBus);
 DHT HumSensor1(Dht22Pin, DHT22);
-PIRegulation ParametersT1
-{
-     1.0,
-     1.0,
-     1.0,
-     0.0,
-     0.0,
-
-};
-PIRegulation ParametersT2
-{
-     1.0,
-     1.0,
-     1.0,
-     0.0,
-     0.0,
-
-};
-PIRegulation ParametersT3
-{
-     1.0,
-     1.0,
-     1.0,
-     0.0,
-     0.0,
-
-};
+PIRegulation ParametersT1;
+PIRegulation ParametersT2;
+PIRegulation ParametersT3;
 
 
 DeviceAddress TempAdress2={0x28, 0x94, 0x49, 0x38, 0x80, 0x22, 0xB, 0x2F};
@@ -93,7 +65,7 @@ DeviceAddress TempAdress1={0x28, 0xC6, 0x3E, 0xBE, 0x80, 0x22, 0xB, 0x83};
 int RTCAdress=0x64;
 
 float ReadingMoisture();
-int HumRelayRegulator(float, float, float);
+bool RelayRegulator(float,float);
 void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
 TSstruct TempMeasurements();
@@ -162,6 +134,10 @@ TempSensors.begin();
 HumSensor1.begin();
 Wire.begin();
 //SetTime();
+
+ParametersT1.Kp = 24.0;
+ParametersT1.Ti = 1000.0f;
+
 }
 
 
@@ -189,16 +165,18 @@ if (flagM==1)
 {
   TSstruct sensorData;
   sensorData=TempMeasurements();
-  // Parameters1.PIController(tempUp,SetTemp1);
-  // SetHeaterLevel(1, ParametersT1.u);
-  // sensorData.heater = level1;
-  float wysterowanie = 0.5;
-  SetHeaterLevel(1, 0);
+  ParametersT1.PIControl(sensorData.tempUp,SetTemp1);
+  SetHeaterLevel(1, ParametersT1.u);
   sensorData.heater1 = level1;
+  sensorData.heater2 = SetTemp1;
+   sensorData.heater3 = 0;
+  /*
   SetHeaterLevel(2, 0);
   sensorData.heater2 = level2;
   SetHeaterLevel(3, 0);
   sensorData.heater3 = level3;
+  bool RelayStatus=RelayRegulator(sensorData.hum, 5.0);
+  digitalWrite(Pump,!RelayStatus);*/
   SendTSData(sensorData);
   flagM=0;
 }	
@@ -257,8 +235,6 @@ void ReadMqtt(char* topic, byte* payload, unsigned int length) {
           MessageString.concat((char)payload[i]);
         }
       Status=MessageString.toInt();
-      Serial.println(Status);
-      Serial.println(topic);
 
       if(strcmp(topic1, topic)==0 )
       {
@@ -308,14 +284,14 @@ float ReadingMoisture()
 }
 
 
-int HumRelayRegulator(float SetValue, float ActualValue, float Histeresis)
+bool RelayRegulator(float ActualValue, float Histeresis)
 {
       static bool On=0;
-      if (ActualValue<SetValue-Histeresis)
+      if (ActualValue<SetHum-Histeresis)
       {
         On=1;
       }
-        if (ActualValue>SetValue+Histeresis)
+        if (ActualValue>SetHum+Histeresis)
       {
         On=0;
       }

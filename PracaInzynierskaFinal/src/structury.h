@@ -16,15 +16,15 @@ typedef struct TSstruc
 typedef struct PIRegulation
 {
     float Kp;
-    float Ki;
     float Ti;
-    float sum_err;
-    float u;
+    float sum_err = 0.0f;
+    float u = 0.0f;
 
     void PIControl(float setValue, float refValue)
     {
         float Error=setValue-refValue;
         sum_err=sum_err+Error;
+        u=Kp*Error+Kp/Ti*10*sum_err;
         if (u>1.0)
         {
             sum_err=sum_err-Error;
@@ -35,8 +35,8 @@ typedef struct PIRegulation
             sum_err=sum_err-Error;
             u=0.0;
         }
-        u=Kp*Error+Ki/Ti*10*sum_err;
 
     }
+
 }PIRegulation;
 
