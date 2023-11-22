@@ -16,7 +16,6 @@ typedef struct TSstruc
 typedef struct PIRegulation
 {
     float Kp;
-    float Ki;
     float Ti;
     float sum_err;
     float u;
@@ -35,7 +34,7 @@ typedef struct PIRegulation
             sum_err=sum_err-Error;
             u=0.0;
         }
-        u=Kp*Error+Ki/Ti*10*sum_err;
+        u=Kp*Error+Kp/Ti*10*sum_err;
 
     }
 }PIRegulation;
