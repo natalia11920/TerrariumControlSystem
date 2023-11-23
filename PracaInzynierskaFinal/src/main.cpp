@@ -20,8 +20,8 @@
 #define Pump 27
 #define Max_PWM 255
 #define SAMPLE_TIME 10.0
-#define U_max 1.0
-#define U_min 0.0
+#define U_max 0.5
+#define U_min -0.5
 
 
 
@@ -135,9 +135,12 @@ HumSensor1.begin();
 Wire.begin();
 //SetTime();
 
-ParametersT1.Kp = 24.0;
-ParametersT1.Ti = 1000.0f;
-
+ParametersT1.Kp = 0.1207;
+ParametersT1.Ti = 865.2339;
+ParametersT2.Kp = 0.4393;
+ParametersT2.Ti = 610.4889;
+ParametersT3.Kp = 12.7806;
+ParametersT3.Ti = 83.0169;
 }
 
 
@@ -165,18 +168,19 @@ if (flagM==1)
 {
   TSstruct sensorData;
   sensorData=TempMeasurements();
-  ParametersT1.PIControl(sensorData.tempUp,SetTemp1);
+  ParametersT1.PIControl(SetTemp1,sensorData.tempUp);
+  ParametersT2.PIControl(SetTemp2,sensorData.tempMiddle);
+  ParametersT3.PIControl(SetTemp3,sensorData.tempDown);
   SetHeaterLevel(1, ParametersT1.u);
-  sensorData.heater1 = level1;
-  sensorData.heater2 = SetTemp1;
-   sensorData.heater3 = 0;
-  /*
-  SetHeaterLevel(2, 0);
-  sensorData.heater2 = level2;
-  SetHeaterLevel(3, 0);
-  sensorData.heater3 = level3;
+  sensorData.heater1 = ParametersT1.u;
+  //sensorData.heater2 = ParametersT2.u;
+  //sensorData.heater3 = ParametersT3.u;
+  SetHeaterLevel(2, ParametersT2.u);
+  //sensorData.heater2 = level2;
+  SetHeaterLevel(3, ParametersT2.u);
+  //sensorData.heater3 = level3;
   bool RelayStatus=RelayRegulator(sensorData.hum, 5.0);
-  digitalWrite(Pump,!RelayStatus);*/
+  digitalWrite(Pump,!RelayStatus);
   SendTSData(sensorData);
   flagM=0;
 }	
@@ -211,7 +215,7 @@ void SetHeaterLevel(int id, float U)
       }
 
 
-      int PWM=Max_PWM*U;
+      int PWM=Max_PWM*U+127.5;
 
       switch (id)
       {
@@ -225,6 +229,7 @@ void SetHeaterLevel(int id, float U)
         level3=PWM;
         break;
       }
+
 }
 
 void ReadMqtt(char* topic, byte* payload, unsigned int length) {
@@ -235,15 +240,14 @@ void ReadMqtt(char* topic, byte* payload, unsigned int length) {
           MessageString.concat((char)payload[i]);
         }
       Status=MessageString.toInt();
-
       if(strcmp(topic1, topic)==0 )
       {
-        level1=Status;
+        SetTemp1=Status;
       }
 
       if(strcmp(topic2, topic)==0)
       {
-        level3=Status;
+        SetTemp3=Status;
       }
 
       if(strcmp(topic3, topic)==0)
@@ -253,7 +257,7 @@ void ReadMqtt(char* topic, byte* payload, unsigned int length) {
 
       if(strcmp(topic4, topic)==0)
       {
-        level2=Status;
+        SetTemp2=Status;
       }
 }
 
