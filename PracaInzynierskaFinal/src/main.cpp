@@ -19,10 +19,8 @@
 #define HeatingCable 33
 #define Pump 27
 #define Max_PWM 255
-#define SAMPLE_TIME 10.0
-#define U_max 0.5
-#define U_min -0.5
-
+#define U_max 1
+#define U_min 0
 
 
 const char* ssid = "2.4G-Vectra-WiFi-224A24" ;
@@ -35,11 +33,14 @@ const char* topic3="PumpTerr_01";
 const char* topic4="MatTerr_01";
 unsigned int mqttPort=1883;
 unsigned long int chanel = 2279857;
-volatile int level1=0;
-volatile int level2=0;
-volatile int level3=0;
+volatile int level1=127;
+volatile int level2=127;
+volatile int level3=127;
 volatile int flagM=0;
 volatile int flagP=0;
+int T01=34;
+int T02=25;
+int T03=26;
 
 float SetTemp1=0.0;
 float SetTemp2=0.0;
@@ -135,8 +136,8 @@ HumSensor1.begin();
 Wire.begin();
 //SetTime();
 
-ParametersT1.Kp = 0.1207;
-ParametersT1.Ti = 865.2339;
+ParametersT1.Kp = 0.1425;
+ParametersT1.Ti = 1063.7;
 ParametersT2.Kp = 0.4393;
 ParametersT2.Ti = 610.4889;
 ParametersT3.Kp = 12.7806;
@@ -168,16 +169,14 @@ if (flagM==1)
 {
   TSstruct sensorData;
   sensorData=TempMeasurements();
-  ParametersT1.PIControl(SetTemp1,sensorData.tempUp);
-  ParametersT2.PIControl(SetTemp2,sensorData.tempMiddle);
-  ParametersT3.PIControl(SetTemp3,sensorData.tempDown);
-  SetHeaterLevel(1, ParametersT1.u);
-  sensorData.heater1 = ParametersT1.u;
-  //sensorData.heater2 = ParametersT2.u;
-  //sensorData.heater3 = ParametersT3.u;
-  SetHeaterLevel(2, ParametersT2.u);
+  //ParametersT1.PIControl(SetTemp1-T01,sensorData.tempUp-T01);
+  //ParametersT2.PIControl(SetTemp2-T02,sensorData.tempMiddle-T02);
+  //ParametersT3.PIControl(SetTemp3-T03,sensorData.tempDown-T03);
+  //SetHeaterLevel(1, ParametersT1.u);
+  //sensorData.heater1 = ParametersT1.u;
+  //SetHeaterLevel(2, ParametersT2.u);
   //sensorData.heater2 = level2;
-  SetHeaterLevel(3, ParametersT2.u);
+  //SetHeaterLevel(3, ParametersT3.u);
   //sensorData.heater3 = level3;
   bool RelayStatus=RelayRegulator(sensorData.hum, 5.0);
   digitalWrite(Pump,!RelayStatus);
@@ -204,7 +203,7 @@ void SendTSData(TSstruct data)
 void SetHeaterLevel(int id, float U)
 {
 
-      if (U<U_min)
+     /* if (U<U_min)
       {
           U=U_min;
       }
@@ -212,10 +211,10 @@ void SetHeaterLevel(int id, float U)
       if (U>U_max)
       {
         U=U_max;
-      }
+      }*/
 
 
-      int PWM=Max_PWM*U+127.5;
+      int PWM=Max_PWM*U+127;
 
       switch (id)
       {
@@ -242,22 +241,26 @@ void ReadMqtt(char* topic, byte* payload, unsigned int length) {
       Status=MessageString.toInt();
       if(strcmp(topic1, topic)==0 )
       {
-        SetTemp1=Status;
+        //SetTemp1=Status;
+        level1=Status;
       }
 
       if(strcmp(topic2, topic)==0)
       {
-        SetTemp3=Status;
+        //SetTemp3=Status;
+        level3=Status;
       }
 
       if(strcmp(topic3, topic)==0)
       {
         SetHum=Status;
+        
       }
 
       if(strcmp(topic4, topic)==0)
       {
-        SetTemp2=Status;
+        //SetTemp2=Status;
+        level2=Status;
       }
 }
 
