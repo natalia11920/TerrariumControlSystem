@@ -25,15 +25,16 @@ typedef struct PIRegulation
         float Error=setValue-refValue;
         sum_err=sum_err+Error;
         u=Kp*Error+Kp/Ti*30*sum_err;
-        if (u>0.5) 
+        u=u+0.5;
+        if (u>1) 
         {
             sum_err=sum_err-Error;
-            u=0.5; 
+            u=0; 
         }
-        if (u<-0.5) 
+        if (u<-1) 
         {
             sum_err=sum_err-Error;
-            u=-0.5; 
+            u=0; 
         }
 
     }

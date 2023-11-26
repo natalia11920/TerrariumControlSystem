@@ -69,7 +69,7 @@ float ReadingMoisture();
 bool RelayRegulator(float,float);
 void ReadMqtt(char*, byte*, unsigned int );
 void reconnect();
-TSstruct TempMeasurements();
+TSstruct Measurements();
 void SendTSData(TSstruct );
 void SetHeaterLevel(int, float);
 
@@ -136,12 +136,12 @@ HumSensor1.begin();
 Wire.begin();
 //SetTime();
 
-ParametersT1.Kp = 0.1425;
-ParametersT1.Ti = 1063.7;
-ParametersT2.Kp = 0.4393;
-ParametersT2.Ti = 610.4889;
-ParametersT3.Kp = 12.7806;
-ParametersT3.Ti = 83.0169;
+ParametersT1.Kp = 0.2135;
+ParametersT1.Ti = 767.232;
+ParametersT2.Kp = 0.5899;
+ParametersT2.Ti = 469.6299;
+ParametersT3.Kp = 0.6398;
+ParametersT3.Ti = 453.8457;
 }
 
 
@@ -168,16 +168,41 @@ mqttClient.loop();
 if (flagM==1)
 {
   TSstruct sensorData;
-  sensorData=TempMeasurements();
-  //ParametersT1.PIControl(SetTemp1-T01,sensorData.tempUp-T01);
-  //ParametersT2.PIControl(SetTemp2-T02,sensorData.tempMiddle-T02);
-  //ParametersT3.PIControl(SetTemp3-T03,sensorData.tempDown-T03);
-  //SetHeaterLevel(1, ParametersT1.u);
-  //sensorData.heater1 = ParametersT1.u;
-  //SetHeaterLevel(2, ParametersT2.u);
-  //sensorData.heater2 = level2;
-  //SetHeaterLevel(3, ParametersT3.u);
-  //sensorData.heater3 = level3;
+  sensorData=Measurements();
+ ParametersT1.PIControl(SetTemp1-T01,sensorData.tempUp-T01);
+  ParametersT2.PIControl(SetTemp2-T02,sensorData.tempMiddle-T02);
+  ParametersT3.PIControl(SetTemp3-T03,sensorData.tempDown-T03);
+  SetHeaterLevel(1, ParametersT1.u);
+  sensorData.heater1 = ParametersT1.u;
+  SetHeaterLevel(2, ParametersT2.u);
+  sensorData.heater2 = level2;
+  SetHeaterLevel(3, ParametersT3.u);
+  sensorData.heater3 = level3;
+ /*if (level1==127)
+  {
+      sensorData.heater1 = 0.5;
+  }
+  else
+  {
+      sensorData.heater1 = 1;
+  }
+  if (level2==127)
+  {
+      sensorData.heater2 = 0.5;
+  }
+  else
+  {
+      sensorData.heater2 = 1;
+  }
+
+    if (level3==127)
+  {
+      sensorData.heater3 = 0.5;
+  }
+  else
+  {
+      sensorData.heater3 = 1;
+  }*/
   bool RelayStatus=RelayRegulator(sensorData.hum, 5.0);
   digitalWrite(Pump,!RelayStatus);
   SendTSData(sensorData);
@@ -214,7 +239,7 @@ void SetHeaterLevel(int id, float U)
       }*/
 
 
-      int PWM=Max_PWM*U+127;
+      int PWM=Max_PWM*U;
 
       switch (id)
       {
@@ -241,14 +266,14 @@ void ReadMqtt(char* topic, byte* payload, unsigned int length) {
       Status=MessageString.toInt();
       if(strcmp(topic1, topic)==0 )
       {
-        //SetTemp1=Status;
-        level1=Status;
+        SetTemp1=Status;
+        //level1=Status;
       }
 
       if(strcmp(topic2, topic)==0)
       {
-        //SetTemp3=Status;
-        level3=Status;
+        SetTemp3=Status;
+        //level3=Status;
       }
 
       if(strcmp(topic3, topic)==0)
@@ -259,12 +284,12 @@ void ReadMqtt(char* topic, byte* payload, unsigned int length) {
 
       if(strcmp(topic4, topic)==0)
       {
-        //SetTemp2=Status;
-        level2=Status;
+        SetTemp2=Status;
+        //level2=Status;
       }
 }
 
-TSstruct TempMeasurements()
+TSstruct Measurements()
 {
   TSstruct data;
   TempSensors.requestTemperatures();
