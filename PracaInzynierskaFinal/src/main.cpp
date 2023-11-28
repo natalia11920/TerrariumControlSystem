@@ -38,15 +38,14 @@ volatile int level2=127;
 volatile int level3=127;
 volatile int flagM=0;
 volatile int flagP=0;
-int T01=34;
-int T02=25;
-int T03=26;
+int T01=33.125;
+int T02=31;
+int T03=29.4375;
 
-float SetTemp1=0.0;
-float SetTemp2=0.0;
-float SetTemp3=0.0;
+float SetTemp1=0;
+float SetTemp2=0;
+float SetTemp3=0;
 float SetHum=0.0;
-
 
 hw_timer_t * timer1 = NULL; 
 hw_timer_t * timer2 = NULL; 
@@ -169,15 +168,35 @@ if (flagM==1)
 {
   TSstruct sensorData;
   sensorData=Measurements();
- ParametersT1.PIControl(SetTemp1-T01,sensorData.tempUp-T01);
-  ParametersT2.PIControl(SetTemp2-T02,sensorData.tempMiddle-T02);
-  ParametersT3.PIControl(SetTemp3-T03,sensorData.tempDown-T03);
+  if (SetTemp1!=0)
+  {
+     ParametersT1.PIControl(SetTemp1,sensorData.tempUp);
+  }
+  else{
+        ParametersT1.u=0.5;
+  }
+  if (SetTemp2!=0)
+  {
+    ParametersT2.PIControl(SetTemp2,sensorData.tempMiddle);  
+  }
+  else
+  {
+        ParametersT2.u=0.5;
+  }
+  if (SetTemp3!=0)
+  {
+    ParametersT3.PIControl(SetTemp3,sensorData.tempDown);
+  }
+  else {
+    ParametersT3.u=0.5;
+  }
+ 
   SetHeaterLevel(1, ParametersT1.u);
   sensorData.heater1 = ParametersT1.u;
   SetHeaterLevel(2, ParametersT2.u);
-  sensorData.heater2 = level2;
+  sensorData.heater2 = ParametersT2.u;
   SetHeaterLevel(3, ParametersT3.u);
-  sensorData.heater3 = level3;
+  sensorData.heater3 = ParametersT3.u;
  /*if (level1==127)
   {
       sensorData.heater1 = 0.5;
@@ -228,7 +247,7 @@ void SendTSData(TSstruct data)
 void SetHeaterLevel(int id, float U)
 {
 
-     /* if (U<U_min)
+      if (U<U_min)
       {
           U=U_min;
       }
@@ -236,7 +255,7 @@ void SetHeaterLevel(int id, float U)
       if (U>U_max)
       {
         U=U_max;
-      }*/
+      }
 
 
       int PWM=Max_PWM*U;
@@ -293,9 +312,40 @@ TSstruct Measurements()
 {
   TSstruct data;
   TempSensors.requestTemperatures();
-  data.tempUp=TempSensors.getTempC(TempAdress2);
-  data.tempMiddle=TempSensors.getTempC(TempAdress1);
-  data.tempDown=TempSensors.getTempC(TempAdress3);
+  static float T1_prev,T2_prev,T3_prev;
+  float T1=TempSensors.getTempC(TempAdress2);
+    if (T1!=DEVICE_DISCONNECTED_C)
+    { 
+      T1_prev=T1;
+      data.tempUp=T1;
+    }
+    else
+    {
+      data.tempUp=T1_prev;
+    }
+
+    float T2=TempSensors.getTempC(TempAdress1);
+    if (T2!=DEVICE_DISCONNECTED_C)
+    {
+      T2_prev=T2;
+      data.tempMiddle=T2;
+    }
+    else
+    {
+      data.tempMiddle=T2_prev;
+    }
+
+    float T3=TempSensors.getTempC(TempAdress3);
+    if (T3!=DEVICE_DISCONNECTED_C)
+    {
+      T3_prev=T3;
+      data.tempDown=T3;
+    }
+    else
+    {
+      data.tempDown=T3_prev;
+    }
+    
   data.hum=HumSensor1.readHumidity();
   data.humDown=ReadingMoisture();
   data.heater1=0;
