@@ -35,7 +35,7 @@ typedef struct PIRegulation
         {
             sum_err=sum_err-Error;
             u=0; 
-        }
+}
 
     }
 
