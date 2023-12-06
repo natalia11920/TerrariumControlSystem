@@ -120,7 +120,7 @@ mqttClient.subscribe(topic3,2);
 mqttClient.subscribe(topic4,2);
 
 timer1 = timerBegin(1, 80, true);
-timer2 = timerBegin(2 , 80, true);
+timer2 = timerBegin(2, 80, true);
 timerAttachInterrupt(timer1,pwmInterrupt,true);
 timerAttachInterrupt(timer2,measureFunction,true);
 timerAlarmWrite(timer1,40000,true);
@@ -135,12 +135,25 @@ HumSensor1.begin();
 Wire.begin();
 //SetTime();
 
-ParametersT1.Kp = 0.2135;
-ParametersT1.Ti = 767.232;
-ParametersT2.Kp = 0.5899;
-ParametersT2.Ti = 469.6299;
-ParametersT3.Kp = 0.6398;
-ParametersT3.Ti = 453.8457;
+ParametersT1.Kp = 0.1670;
+ParametersT1.Ti = 899.1;
+ParametersT2.Kp = 0.4013;
+ParametersT2.Ti = 749.25;
+ParametersT3.Kp = 0.4345;
+ParametersT3.Ti = 599.4;
+
+ParametersT1.w1=0.8497;
+ParametersT1.w2=-0.4629;
+ParametersT1.w3=-0.2525;
+
+ParametersT2.w1=-0.1007;
+ParametersT2.w2=0.9874;
+ParametersT2.w3=-0.1221;
+
+ParametersT3.w1=-0.0693;
+ParametersT3.w2=-0.1204;
+ParametersT3.w3=0.9903;
+
 }
 
 
@@ -170,58 +183,47 @@ if (flagM==1)
   sensorData=Measurements();
   if (SetTemp1!=0)
   {
-     ParametersT1.PIControl(SetTemp1,sensorData.tempUp);
-  }
-  else{
-        ParametersT1.u=0.5;
+      ParametersT1.PIControl(SetTemp1,sensorData.tempUp);
+      SetHeaterLevel(1, ParametersT1.u1);
+      sensorData.heater1 = ParametersT1.u1;
+      SetHeaterLevel(2, ParametersT1.u2);
+      sensorData.heater2 = ParametersT1.u2;
+      SetHeaterLevel(3, ParametersT1.u3);
+      sensorData.heater3 = ParametersT1.u3;
   }
   if (SetTemp2!=0)
   {
-    ParametersT2.PIControl(SetTemp2,sensorData.tempMiddle);  
-  }
-  else
-  {
-        ParametersT2.u=0.5;
+      ParametersT2.PIControl(SetTemp2,sensorData.tempMiddle);  
+      SetHeaterLevel(1, ParametersT2.u1);
+      sensorData.heater1 = ParametersT2.u1;
+      SetHeaterLevel(2, ParametersT2.u2);
+      sensorData.heater2 = ParametersT2.u2;
+      SetHeaterLevel(3, ParametersT2.u3);
+      sensorData.heater3 = ParametersT2.u3;
   }
   if (SetTemp3!=0)
   {
-    ParametersT3.PIControl(SetTemp3,sensorData.tempDown);
-  }
-  else {
-    ParametersT3.u=0.5;
-  }
- 
-  SetHeaterLevel(1, ParametersT1.u);
-  sensorData.heater1 = ParametersT1.u;
-  SetHeaterLevel(2, ParametersT2.u);
-  sensorData.heater2 = ParametersT2.u;
-  SetHeaterLevel(3, ParametersT3.u);
-  sensorData.heater3 = ParametersT3.u;
- /*if (level1==127)
-  {
-      sensorData.heater1 = 0.5;
-  }
-  else
-  {
-      sensorData.heater1 = 1;
-  }
-  if (level2==127)
-  {
-      sensorData.heater2 = 0.5;
-  }
-  else
-  {
-      sensorData.heater2 = 1;
+      ParametersT3.PIControl(SetTemp3,sensorData.tempDown);
+      SetHeaterLevel(1, ParametersT3.u1);
+      sensorData.heater1 = ParametersT3.u1;
+      SetHeaterLevel(2, ParametersT3.u2);
+      sensorData.heater2 = ParametersT3.u2;
+      SetHeaterLevel(3, ParametersT3.u3);
+      sensorData.heater3 = ParametersT3.u3;
   }
 
-    if (level3==127)
+  if (SetTemp1==0 && SetTemp2==0 && SetTemp3==0)
   {
+      SetHeaterLevel(1, 0.5);
+      sensorData.heater1 = 0.5;
+      SetHeaterLevel(2, 0.5);
+      sensorData.heater2 = 0.5;
+      SetHeaterLevel(3, 0.5);
       sensorData.heater3 = 0.5;
+
   }
-  else
-  {
-      sensorData.heater3 = 1;
-  }*/
+
+
   bool RelayStatus=RelayRegulator(sensorData.hum, 5.0);
   digitalWrite(Pump,!RelayStatus);
   SendTSData(sensorData);
@@ -275,24 +277,25 @@ void SetHeaterLevel(int id, float U)
 
 }
 
-void ReadMqtt(char* topic, byte* payload, unsigned int length) {
+void ReadMqtt(char* topic, byte* sign, unsigned int length) {
 
-      int Status;
+      int Status,i;
       String MessageString;
-        for (int i = 0; i < length; i++) {
-          MessageString.concat((char)payload[i]);
-        }
+      i=0;
+      while ( i < length) {
+        MessageString.concat((char)sign[i]);
+        i++;
+      };
+
       Status=MessageString.toInt();
       if(strcmp(topic1, topic)==0 )
       {
         SetTemp1=Status;
-        //level1=Status;
       }
 
       if(strcmp(topic2, topic)==0)
       {
         SetTemp3=Status;
-        //level3=Status;
       }
 
       if(strcmp(topic3, topic)==0)
@@ -304,7 +307,6 @@ void ReadMqtt(char* topic, byte* payload, unsigned int length) {
       if(strcmp(topic4, topic)==0)
       {
         SetTemp2=Status;
-        //level2=Status;
       }
 }
 
