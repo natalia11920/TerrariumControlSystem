@@ -16,8 +16,8 @@
 #define CapacitiveSensor 32
 #define HeatingLamp 14
 #define HeatingMat 12
-#define HeatingCable 33
-#define Pump 27
+#define HeatingMatDown 27
+#define Humidifier 33
 #define Max_PWM 255
 #define U_max 1
 #define U_min 0
@@ -28,9 +28,10 @@ const char* pass ="ez0zkxdqnzkfydj1";
 const char* APIKey= "W55RWPVWCLJOIC82";
 const char* mqttServer="test.mosquitto.org";
 const char* topic1="BulbTerr_01";
-const char* topic2="CableTerr_01";
+const char* topic2="Mat2Terr_01";
 const char* topic3="PumpTerr_01";
 const char* topic4="MatTerr_01";
+const char* topic5="TerraModeHumTemp";
 unsigned int mqttPort=1883;
 unsigned long int chanel = 2279857;
 volatile int level1=127;
@@ -41,6 +42,7 @@ volatile int flagP=0;
 int T01=33.125;
 int T02=31;
 int T03=29.4375;
+int Mode=0;
 
 float SetTemp1=0;
 float SetTemp2=0;
@@ -77,7 +79,7 @@ void IRAM_ATTR pwmInterrupt(){
   
   digitalWrite(HeatingLamp,sum>level1);
   digitalWrite(HeatingMat,sum>level2);
-  digitalWrite(HeatingCable,sum>level3);
+  digitalWrite(HeatingMatDown,sum>level3);
   
   if (sum >= Max_PWM){
     sum=0;
@@ -93,15 +95,15 @@ void setup() {
 
 Serial.begin(115200);
 
-pinMode(HeatingCable, OUTPUT);
+pinMode(HeatingMatDown, OUTPUT);
 pinMode(HeatingLamp, OUTPUT);
 pinMode(HeatingMat, OUTPUT);
-pinMode(Pump, OUTPUT);
+pinMode(Humidifier, OUTPUT);
 
-digitalWrite(HeatingCable, 1);
+digitalWrite(HeatingMatDown, 1);
 digitalWrite(HeatingLamp, 1);
 digitalWrite(HeatingMat, 1);
-digitalWrite(Pump, 1);
+digitalWrite(Humidifier, 1);
 
 WiFi.mode(WIFI_STA);
 WiFi.begin(ssid, pass);
@@ -181,6 +183,10 @@ if (flagM==1)
 {
   TSstruct sensorData;
   sensorData=Measurements();
+  
+
+if (Mode==1){
+  digitalWrite(Humidifier,1);
   if (SetTemp1!=0)
   {
       ParametersT1.PIControl(SetTemp1,sensorData.tempUp);
@@ -220,16 +226,44 @@ if (flagM==1)
       sensorData.heater2 = 0.5;
       SetHeaterLevel(3, 0.5);
       sensorData.heater3 = 0.5;
+  }
+  }
+
+  if (Mode==2){
+
+      SetHeaterLevel(1, 0.5);
+      sensorData.heater1 = 0.5;
+      SetHeaterLevel(2, 0.5);
+      sensorData.heater2 = 0.5;
+      SetHeaterLevel(3, 0.5);
+      sensorData.heater3 = 0.5;
+
+      bool RelayStatus=RelayRegulator(sensorData.hum, 5.0);
+      digitalWrite(Humidifier,!RelayStatus);
+      sensorData.heater3=RelayStatus;
 
   }
 
+  if (Mode!=1 && Mode!=2){
 
-  bool RelayStatus=RelayRegulator(sensorData.hum, 5.0);
-  digitalWrite(Pump,!RelayStatus);
+      SetHeaterLevel(1, 0.5);
+      sensorData.heater1 = 0.5;
+      SetHeaterLevel(2, 0.5);
+      sensorData.heater2 = 0.5;
+      SetHeaterLevel(3, 0.5);
+      sensorData.heater3 = 0.5;
+
+      digitalWrite(Humidifier,1);
+      
+}
+  
   SendTSData(sensorData);
   flagM=0;
-}	
+
 }
+}
+
+
 
 
 void SendTSData(TSstruct data)
@@ -308,6 +342,13 @@ void ReadMqtt(char* topic, byte* sign, unsigned int length) {
       {
         SetTemp2=Status;
       }
+
+
+      if(strcmp(topic5, topic)==0)
+      {
+        Mode=Status;
+      }
+
 }
 
 TSstruct Measurements()
