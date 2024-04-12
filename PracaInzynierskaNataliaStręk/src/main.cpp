@@ -21,15 +21,15 @@
 #define U_min 0
 
 
-const char* ssid = "2.4G-Vectra-WiFi-224A24" ;
-const char* pass ="ez0zkxdqnzkfydj1";
-const char* APIKey= "W55RWPVWCLJOIC82";
+const char* ssid = "" ;
+const char* pass ="";
+const char* APIKey= "";
 const char* mqttServer="test.mosquitto.org";
-const char* topic1="BulbTerr_01";
-const char* topic2="Mat2Terr_01";
-const char* topic3="PumpTerr_01";
-const char* topic4="MatTerr_01";
-const char* topic5="TerraModeHumTemp";
+const char* topic1="";
+const char* topic2="";
+const char* topic3="";
+const char* topic4="";
+const char* topic5="";
 unsigned int mqttPort=1883;
 unsigned long int chanel = 2279857;
 volatile int level1=127;
