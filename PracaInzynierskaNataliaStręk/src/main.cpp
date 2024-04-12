@@ -345,6 +345,40 @@ TSstruct Measurements()
 {
   TSstruct data;
   TempSensors.requestTemperatures();
+  static float T1_prev,T2_prev,T3_prev;
+  float T1=TempSensors.getTempC(TempAdress2);
+    if (T1!=DEVICE_DISCONNECTED_C)
+    { 
+      T1_prev=T1;
+      data.tempUp=T1;
+    }
+    else
+    {
+      data.tempUp=T1_prev;
+    }
+
+    float T2=TempSensors.getTempC(TempAdress1);
+    if (T2!=DEVICE_DISCONNECTED_C)
+    {
+      T2_prev=T2;
+      data.tempMiddle=T2;
+    }
+    else
+    {
+      data.tempMiddle=T2_prev;
+    }
+
+    float T3=TempSensors.getTempC(TempAdress3);
+    if (T3!=DEVICE_DISCONNECTED_C)
+    {
+      T3_prev=T3;
+      data.tempDown=T3;
+    }
+    else
+    {
+      data.tempDown=T3_prev;
+    }
+  
   data.hum=HumSensor1.readHumidity();
   data.humDown=ReadingMoisture();
   data.heater1=0;
